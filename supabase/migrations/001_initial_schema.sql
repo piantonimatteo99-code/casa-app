@@ -48,8 +48,10 @@ CREATE TABLE IF NOT EXISTS expense_categories (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Categorie default (couple_id NULL = globali)
-INSERT INTO expense_categories (name, icon, color, is_default) VALUES
+-- Categorie default (couple_id NULL = globali, inserite solo se tabella vuota)
+INSERT INTO expense_categories (name, icon, color, is_default)
+SELECT v.name, v.icon, v.color, v.is_default
+FROM (VALUES
   ('Alimentari', 'shopping-cart', '#22c55e', TRUE),
   ('Casa & Utenze', 'home', '#3b82f6', TRUE),
   ('Trasporti', 'car', '#f59e0b', TRUE),
@@ -59,7 +61,11 @@ INSERT INTO expense_categories (name, icon, color, is_default) VALUES
   ('Educazione', 'book', '#06b6d4', TRUE),
   ('Viaggi', 'plane', '#f97316', TRUE),
   ('Tecnologia', 'smartphone', '#64748b', TRUE),
-  ('Altro', 'ellipsis', '#94a3b8', TRUE);
+  ('Altro', 'ellipsis', '#94a3b8', TRUE)
+) AS v(name, icon, color, is_default)
+WHERE NOT EXISTS (
+  SELECT 1 FROM expense_categories WHERE is_default = TRUE AND couple_id IS NULL
+);
 
 -- ============================================================
 -- TABELLA: expenses (spese)
@@ -287,20 +293,22 @@ ALTER TABLE freezer_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pantry_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_list_items ENABLE ROW LEVEL SECURITY;
 
--- Funzione helper: ottieni couple_id dell'utente corrente
-CREATE OR REPLACE FUNCTION auth.get_couple_id()
+-- Funzione helper: ottieni couple_id dell'utente corrente (schema public)
+CREATE OR REPLACE FUNCTION public.get_couple_id()
 RETURNS UUID
 LANGUAGE SQL STABLE
 SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT couple_id FROM couple_members WHERE user_id = auth.uid() LIMIT 1;
 $$;
 
--- Funzione: utente appartiene alla coppia?
-CREATE OR REPLACE FUNCTION auth.user_in_couple(p_couple_id UUID)
+-- Funzione: utente appartiene alla coppia? (schema public)
+CREATE OR REPLACE FUNCTION public.user_in_couple(p_couple_id UUID)
 RETURNS BOOLEAN
 LANGUAGE SQL STABLE
 SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM couple_members
@@ -309,28 +317,47 @@ AS $$
 $$;
 
 -- ---- COUPLES ----
+DROP POLICY IF EXISTS "couples_select" ON couples;
 CREATE POLICY "couples_select" ON couples
-  FOR SELECT USING (auth.user_in_couple(id));
+  FOR SELECT USING (public.user_in_couple(id));
+
+DROP POLICY IF EXISTS "couples_update" ON couples;
 CREATE POLICY "couples_update" ON couples
-  FOR UPDATE USING (auth.user_in_couple(id));
+  FOR UPDATE USING (public.user_in_couple(id));
+
+DROP POLICY IF EXISTS "couples_insert" ON couples;
+CREATE POLICY "couples_insert" ON couples
+  FOR INSERT WITH CHECK (TRUE);
 
 -- ---- COUPLE_MEMBERS ----
+DROP POLICY IF EXISTS "couple_members_select" ON couple_members;
 CREATE POLICY "couple_members_select" ON couple_members
-  FOR SELECT USING (couple_id = auth.get_couple_id());
+  FOR SELECT USING (couple_id = public.get_couple_id() OR user_id = auth.uid());
+
+DROP POLICY IF EXISTS "couple_members_insert" ON couple_members;
 CREATE POLICY "couple_members_insert" ON couple_members
-  FOR INSERT WITH CHECK (TRUE); -- gestito dall'app
+  FOR INSERT WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "couple_members_delete" ON couple_members;
 CREATE POLICY "couple_members_delete" ON couple_members
   FOR DELETE USING (user_id = auth.uid());
 
 -- ---- EXPENSE_CATEGORIES ----
+DROP POLICY IF EXISTS "expense_categories_select" ON expense_categories;
 CREATE POLICY "expense_categories_select" ON expense_categories
-  FOR SELECT USING (couple_id IS NULL OR couple_id = auth.get_couple_id());
+  FOR SELECT USING (couple_id IS NULL OR couple_id = public.get_couple_id());
+
+DROP POLICY IF EXISTS "expense_categories_insert" ON expense_categories;
 CREATE POLICY "expense_categories_insert" ON expense_categories
-  FOR INSERT WITH CHECK (couple_id = auth.get_couple_id());
+  FOR INSERT WITH CHECK (couple_id = public.get_couple_id());
+
+DROP POLICY IF EXISTS "expense_categories_update" ON expense_categories;
 CREATE POLICY "expense_categories_update" ON expense_categories
-  FOR UPDATE USING (couple_id = auth.get_couple_id());
+  FOR UPDATE USING (couple_id = public.get_couple_id());
+
+DROP POLICY IF EXISTS "expense_categories_delete" ON expense_categories;
 CREATE POLICY "expense_categories_delete" ON expense_categories
-  FOR DELETE USING (couple_id = auth.get_couple_id());
+  FOR DELETE USING (couple_id = public.get_couple_id());
 
 -- Macro policy per tabelle con couple_id
 DO $$
@@ -343,34 +370,44 @@ BEGIN
     'freezer_items', 'pantry_items', 'shopping_list_items'
   ] LOOP
     EXECUTE format('
+      DROP POLICY IF EXISTS "%s_couple_select" ON %s;
       CREATE POLICY "%s_couple_select" ON %s FOR SELECT
-        USING (couple_id = auth.get_couple_id());
+        USING (couple_id = public.get_couple_id());
+
+      DROP POLICY IF EXISTS "%s_couple_insert" ON %s;
       CREATE POLICY "%s_couple_insert" ON %s FOR INSERT
-        WITH CHECK (couple_id = auth.get_couple_id());
+        WITH CHECK (couple_id = public.get_couple_id());
+
+      DROP POLICY IF EXISTS "%s_couple_update" ON %s;
       CREATE POLICY "%s_couple_update" ON %s FOR UPDATE
-        USING (couple_id = auth.get_couple_id());
+        USING (couple_id = public.get_couple_id());
+
+      DROP POLICY IF EXISTS "%s_couple_delete" ON %s;
       CREATE POLICY "%s_couple_delete" ON %s FOR DELETE
-        USING (couple_id = auth.get_couple_id());
+        USING (couple_id = public.get_couple_id());
     ', t, t, t, t, t, t, t, t);
   END LOOP;
 END;
 $$;
 
 -- ---- INVESTMENT_PRICES (accesso tramite join) ----
+DROP POLICY IF EXISTS "investment_prices_select" ON investment_prices;
 CREATE POLICY "investment_prices_select" ON investment_prices
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM investments i
       WHERE i.id = investment_prices.investment_id
-        AND i.couple_id = auth.get_couple_id()
+        AND i.couple_id = public.get_couple_id()
     )
   );
+
+DROP POLICY IF EXISTS "investment_prices_insert" ON investment_prices;
 CREATE POLICY "investment_prices_insert" ON investment_prices
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1 FROM investments i
       WHERE i.id = investment_prices.investment_id
-        AND i.couple_id = auth.get_couple_id()
+        AND i.couple_id = public.get_couple_id()
     )
   );
 
@@ -447,10 +484,11 @@ BEGIN
     'freezer_items', 'pantry_items', 'shopping_list_items'
   ] LOOP
     EXECUTE format('
+      DROP TRIGGER IF EXISTS trigger_update_%s_updated_at ON %s;
       CREATE TRIGGER trigger_update_%s_updated_at
         BEFORE UPDATE ON %s
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    ', t, t);
+    ', t, t, t, t);
   END LOOP;
 END;
 $$;
@@ -458,9 +496,19 @@ $$;
 -- ============================================================
 -- REALTIME
 -- ============================================================
--- Abilita realtime su tabelle critiche
-ALTER PUBLICATION supabase_realtime ADD TABLE expenses;
-ALTER PUBLICATION supabase_realtime ADD TABLE shopping_list_items;
-ALTER PUBLICATION supabase_realtime ADD TABLE meal_plan;
-ALTER PUBLICATION supabase_realtime ADD TABLE investment_prices;
-ALTER PUBLICATION supabase_realtime ADD TABLE freezer_items;
+-- Abilita realtime su tabelle critiche in modo sicuro
+DO $$
+DECLARE
+  tbl TEXT;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY['expenses', 'shopping_list_items', 'meal_plan', 'investment_prices', 'freezer_items'] LOOP
+    BEGIN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I;', tbl);
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+      WHEN undefined_object THEN NULL;
+      WHEN OTHERS THEN NULL;
+    END;
+  END LOOP;
+END;
+$$;
