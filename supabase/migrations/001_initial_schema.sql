@@ -370,22 +370,22 @@ BEGIN
     'freezer_items', 'pantry_items', 'shopping_list_items'
   ] LOOP
     EXECUTE format('
-      DROP POLICY IF EXISTS "%s_couple_select" ON %s;
-      CREATE POLICY "%s_couple_select" ON %s FOR SELECT
+      DROP POLICY IF EXISTS "%1$s_couple_select" ON %1$I;
+      CREATE POLICY "%1$s_couple_select" ON %1$I FOR SELECT
         USING (couple_id = public.get_couple_id());
 
-      DROP POLICY IF EXISTS "%s_couple_insert" ON %s;
-      CREATE POLICY "%s_couple_insert" ON %s FOR INSERT
+      DROP POLICY IF EXISTS "%1$s_couple_insert" ON %1$I;
+      CREATE POLICY "%1$s_couple_insert" ON %1$I FOR INSERT
         WITH CHECK (couple_id = public.get_couple_id());
 
-      DROP POLICY IF EXISTS "%s_couple_update" ON %s;
-      CREATE POLICY "%s_couple_update" ON %s FOR UPDATE
+      DROP POLICY IF EXISTS "%1$s_couple_update" ON %1$I;
+      CREATE POLICY "%1$s_couple_update" ON %1$I FOR UPDATE
         USING (couple_id = public.get_couple_id());
 
-      DROP POLICY IF EXISTS "%s_couple_delete" ON %s;
-      CREATE POLICY "%s_couple_delete" ON %s FOR DELETE
+      DROP POLICY IF EXISTS "%1$s_couple_delete" ON %1$I;
+      CREATE POLICY "%1$s_couple_delete" ON %1$I FOR DELETE
         USING (couple_id = public.get_couple_id());
-    ', t, t, t, t, t, t, t, t);
+    ', t);
   END LOOP;
 END;
 $$;
@@ -484,11 +484,11 @@ BEGIN
     'freezer_items', 'pantry_items', 'shopping_list_items'
   ] LOOP
     EXECUTE format('
-      DROP TRIGGER IF EXISTS trigger_update_%s_updated_at ON %s;
-      CREATE TRIGGER trigger_update_%s_updated_at
-        BEFORE UPDATE ON %s
+      DROP TRIGGER IF EXISTS trigger_update_%1$I_updated_at ON %1$I;
+      CREATE TRIGGER trigger_update_%1$I_updated_at
+        BEFORE UPDATE ON %1$I
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    ', t, t, t, t);
+    ', t);
   END LOOP;
 END;
 $$;
