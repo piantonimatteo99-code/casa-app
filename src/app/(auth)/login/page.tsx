@@ -17,19 +17,39 @@ export default function LoginPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    try {
+      const isConfigured =
+        process.env.NEXT_PUBLIC_SUPABASE_URL &&
+        !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!isConfigured) {
+        setError(
+          'Supabase non è ancora configurato. Aggiungi NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nelle Environment Variables di Vercel.'
+        );
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      setError('Email o password non corretti.');
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        setError('Email o password non corretti.');
+        setLoading(false);
+        return;
+      }
+
+      router.push('/dashboard');
+      router.refresh();
+    } catch (err: any) {
+      if (err?.message?.includes('fetch') || err?.message?.includes('network') || String(err).includes('Failed to fetch')) {
+        setError(
+          'Impossibile connettersi al database: inserisci NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nelle Environment Variables di Vercel.'
+        );
+      } else {
+        setError(err?.message ?? 'Errore durante il login.');
+      }
       setLoading(false);
-      return;
     }
-
-    router.push('/dashboard');
-    router.refresh();
   }
 
   return (

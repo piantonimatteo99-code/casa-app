@@ -22,19 +22,32 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { display_name: displayName } },
-    });
+    try {
+      const isConfigured =
+        process.env.NEXT_PUBLIC_SUPABASE_URL &&
+        !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
 
-    if (signUpError || !authData.user) {
-      setError(signUpError?.message ?? 'Errore durante la registrazione.');
-      setLoading(false);
-      return;
-    }
+      if (!isConfigured) {
+        setError(
+          'Supabase non è ancora configurato. Aggiungi NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nelle Environment Variables di Vercel.'
+        );
+        setLoading(false);
+        return;
+      }
 
-    const userId = authData.user.id;
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: displayName } },
+      });
+
+      if (signUpError || !authData.user) {
+        setError(signUpError?.message ?? 'Errore durante la registrazione.');
+        setLoading(false);
+        return;
+      }
+
+      const userId = authData.user.id;
 
     if (inviteCode.trim()) {
       // Unisciti a una coppia esistente tramite invite code (= couple api_key_webhook usato come invite)
@@ -84,8 +97,17 @@ export default function RegisterPage() {
       });
     }
 
-    setSuccess(true);
-    setLoading(false);
+    } catch (err: any) {
+      if (err?.message?.includes('fetch') || err?.message?.includes('network') || String(err).includes('Failed to fetch')) {
+        setError(
+          'Impossibile connettersi al database: inserisci NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nelle Environment Variables di Vercel.'
+        );
+      } else {
+        setError(err?.message ?? 'Errore imprevisto durante la registrazione.');
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (success) {
