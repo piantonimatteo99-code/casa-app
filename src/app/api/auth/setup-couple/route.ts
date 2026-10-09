@@ -3,10 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-function getAdminClient() {
+function getSupabaseClient(preferServiceRole = true) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
-  return createClient(url, key);
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+
+  // Se preferServiceRole è true e c'è una service key valida (non placeholder), usala; altrimenti anonKey
+  const key = preferServiceRole && serviceKey && !serviceKey.includes('placeholder')
+    ? serviceKey
+    : anonKey;
+
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -17,15 +26,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User ID mancante' }, { status: 400 });
     }
 
-    const supabase = getAdminClient();
+    // Prova prima con Service Role, se fallisce per API key errata riprova con Anon Key
+    let supabase = getSupabaseClient(true);
 
     if (inviteCode && String(inviteCode).trim()) {
-      // Cerca coppia per codice invito
-      const { data: couple, error: coupleFindError } = await supabase
+      let { data: couple, error: coupleFindError } = await supabase
         .from('couples')
         .select('id')
         .eq('api_key_webhook', String(inviteCode).trim())
         .maybeSingle();
+
+      if (coupleFindError && coupleFindError.message?.includes('API key')) {
+        supabase = getSupabaseClient(false);
+        const retry = await supabase
+          .from('couples')
+          .select('id')
+          .eq('api_key_webhook', String(inviteCode).trim())
+          .maybeSingle();
+        couple = retry.data;
+        coupleFindError = retry.error;
+      }
 
       if (coupleFindError || !couple) {
         return NextResponse.json({ error: 'Codice invito partner non valido' }, { status: 404 });
@@ -39,25 +59,43 @@ export async function POST(request: NextRequest) {
       });
 
       if (memberError) {
-        return NextResponse.json({ error: 'Errore associazione alla coppia: ' + memberError.message }, { status: 500 });
+        return NextResponse.json({ error: 'Errore associazione partner: ' + memberError.message }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, coupleId: couple.id });
     } else {
-      // Crea nuova coppia
+      // Genera l'UUID della coppia direttamente per evitare SELECT bloccate da RLS
+      const coupleId = crypto.randomUUID();
       const coupleName = displayName ? `Casa di ${displayName}` : 'La Nostra Famiglia';
-      const { data: newCouple, error: coupleError } = await supabase
-        .from('couples')
-        .insert({ name: coupleName })
-        .select('id')
-        .single();
 
-      if (coupleError || !newCouple) {
-        return NextResponse.json({ error: 'Errore creazione coppia: ' + (coupleError?.message || 'sconosciuto') }, { status: 500 });
+      let { error: coupleInsertError } = await supabase
+        .from('couples')
+        .insert({
+          id: coupleId,
+          name: coupleName,
+        });
+
+      // Se la service role key salvata su Vercel è invalida, riprova immediatamente con la anon key!
+      if (coupleInsertError && coupleInsertError.message?.includes('API key')) {
+        supabase = getSupabaseClient(false);
+        const retry = await supabase
+          .from('couples')
+          .insert({
+            id: coupleId,
+            name: coupleName,
+          });
+        coupleInsertError = retry.error;
       }
 
+      if (coupleInsertError) {
+        return NextResponse.json({
+          error: 'Errore creazione coppia: ' + coupleInsertError.message
+        }, { status: 500 });
+      }
+
+      // Inserisci il membro (owner)
       const { error: memberError } = await supabase.from('couple_members').insert({
-        couple_id: newCouple.id,
+        couple_id: coupleId,
         user_id: userId,
         display_name: displayName || 'Utente',
         role: 'owner',
@@ -67,16 +105,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Errore creazione membro: ' + memberError.message }, { status: 500 });
       }
 
-      // Inizializza impostazioni fondo emergenza
+      // Inizializza fondo emergenza default
       await supabase.from('emergency_fund_settings').upsert({
-        couple_id: newCouple.id,
+        couple_id: coupleId,
         target_months: 6,
       }, { onConflict: 'couple_id' });
 
-      return NextResponse.json({ success: true, coupleId: newCouple.id });
+      return NextResponse.json({ success: true, coupleId });
     }
   } catch (err: any) {
-    console.error('Setup couple error:', err);
+    console.error('Setup couple exception:', err);
     return NextResponse.json({ error: err?.message || 'Errore server interno' }, { status: 500 });
   }
 }
