@@ -49,54 +49,26 @@ export default function RegisterPage() {
 
       const userId = authData.user.id;
 
-    if (inviteCode.trim()) {
-      // Unisciti a una coppia esistente tramite invite code (= couple api_key_webhook usato come invite)
-      const { data: couple } = await supabase
-        .from('couples')
-        .select('id')
-        .eq('api_key_webhook', inviteCode.trim())
-        .single();
+      // Inizializza la coppia in modo sicuro tramite API server-side
+      const setupRes = await fetch('/api/auth/setup-couple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          displayName,
+          inviteCode: inviteCode.trim() || undefined,
+        }),
+      });
 
-      if (couple) {
-        await supabase.from('couple_members').insert({
-          couple_id: couple.id,
-          user_id: userId,
-          display_name: displayName,
-          role: 'member',
-        });
-      } else {
-        setError('Codice invito non valido.');
-        setLoading(false);
-        return;
-      }
-    } else {
-      // Crea nuova coppia
-      const { data: newCouple, error: coupleError } = await supabase
-        .from('couples')
-        .insert({ name: `Casa di ${displayName}` })
-        .select('id')
-        .single();
+      const setupData = await setupRes.json();
 
-      if (coupleError || !newCouple) {
-        setError('Errore nella creazione della coppia.');
+      if (!setupRes.ok) {
+        setError(setupData.error || 'Errore nella creazione della coppia.');
         setLoading(false);
         return;
       }
 
-      await supabase.from('couple_members').insert({
-        couple_id: newCouple.id,
-        user_id: userId,
-        display_name: displayName,
-        role: 'owner',
-      });
-
-      // Crea impostazioni fondo emergenza default
-      await supabase.from('emergency_fund_settings').insert({
-        couple_id: newCouple.id,
-        target_months: 6,
-      });
-    }
-
+      setSuccess(true);
     } catch (err: any) {
       if (err?.message?.includes('fetch') || err?.message?.includes('network') || String(err).includes('Failed to fetch')) {
         setError(
