@@ -28,7 +28,11 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register');
+  const isAuthPage =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/auth');
   const isApiRoute = pathname.startsWith('/api');
 
   if (!user && !isAuthPage && !isApiRoute) {
@@ -37,7 +41,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthPage) {
+  // Se l'utente è loggato ma è sulla pagina di reset-password, lascialo cambiare la password!
+  if (user && isAuthPage && !pathname.startsWith('/reset-password')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

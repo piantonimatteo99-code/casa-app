@@ -3,52 +3,57 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-import { Heart, Lock, CheckCircle2, Loader2 } from 'lucide-react';
+import { Heart, CheckCircle2, Loader2, KeyRound } from 'lucide-react';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  async function handleUpdatePassword(e: React.FormEvent) {
+  async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError('La password deve avere almeno 8 caratteri.');
+    if (password.length < 6) {
+      setError('La password deve avere almeno 6 caratteri.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Le password non coincidono.');
+      setError('Le due password non coincidono.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: password,
+      const res = await fetch('/api/auth/admin-reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          newPassword: password,
+        }),
       });
 
-      if (updateError) {
-        setError(updateError.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Errore durante l\'aggiornamento della password.');
         setLoading(false);
         return;
       }
 
       setSuccess(true);
       setTimeout(() => {
-        router.push('/dashboard');
-        router.refresh();
-      }, 2000);
+        router.push('/login');
+      }, 2500);
     } catch (err: any) {
-      setError(err?.message || 'Errore durante l\'aggiornamento della password.');
+      setError(err?.message || 'Errore di connessione al server.');
     } finally {
       setLoading(false);
     }
@@ -67,47 +72,69 @@ export default function ResetPasswordPage() {
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
           {success ? (
-            <div className="text-center space-y-4">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Password aggiornata!</h2>
+            <div className="text-center space-y-4 py-4">
+              <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Password aggiornata con successo!</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Reindirizzamento alla dashboard in corso...
+                Reindirizzamento alla schermata di accesso in corso...
               </p>
             </div>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">Crea nuova password</h2>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Reimposta Password</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Inserisci la tua email e la nuova password</p>
+                </div>
+              </div>
 
               {error && (
-                <div className="mb-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-sm">
+                <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-sm">
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <form onSubmit={handleResetPassword} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Nuova Password
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                    Email Account
                   </label>
                   <input
-                    type="password"
+                    type="email"
                     required
-                    minLength={8}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimo 8 caratteri"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="piantonimatteo.99@gmail.com"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                    Nuova Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimo 6 caratteri"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
                     Conferma Nuova Password
                   </label>
                   <input
                     type="password"
                     required
-                    minLength={8}
+                    minLength={6}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Ripeti la password"
@@ -118,19 +145,18 @@ export default function ResetPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm transition disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm transition disabled:opacity-60 flex items-center justify-center gap-2 text-sm"
                 >
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {loading ? 'Salvataggio...' : 'Salva e Accedi'}
+                  {loading ? 'Salvataggio in corso...' : 'Aggiorna Password Subito'}
                 </button>
               </form>
 
-              <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
-                Ricordi la password?{' '}
-                <Link href="/login" className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
-                  Torna al Login
+              <div className="text-center mt-6">
+                <Link href="/login" className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+                  &larr; Torna alla schermata di Login
                 </Link>
-              </p>
+              </div>
             </>
           )}
         </div>
