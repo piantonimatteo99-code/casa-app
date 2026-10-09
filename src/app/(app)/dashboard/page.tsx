@@ -34,13 +34,30 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: member } = await supabase
+    let { data: member } = await supabase
       .from('couple_members')
       .select('couple_id')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (!member) return;
+    if (!member) {
+      // Auto-heal: se l'utente esiste ma non è ancora associato a una coppia, creala al volo
+      const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Utente';
+      const setupRes = await fetch('/api/auth/setup-couple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, displayName }),
+      });
+      const setupData = await setupRes.json();
+      if (setupData?.coupleId) {
+        member = { couple_id: setupData.coupleId };
+      }
+    }
+
+    if (!member) {
+      setLoading(false);
+      return;
+    }
     const cid = member.couple_id;
     setCoupleId(cid);
 
