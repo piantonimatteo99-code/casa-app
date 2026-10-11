@@ -1,6 +1,6 @@
 export type UserRole = 'owner' | 'member';
 export type AssetType = 'etf' | 'stock' | 'bond' | 'crypto' | 'cash' | 'other';
-export type MealType = 'colazione' | 'pranzo' | 'cena' | 'spuntino';
+export type MealType = 'colazione' | 'pranzo' | 'cena' | 'spuntino' | 'spuntino_mattina' | 'merenda';
 export type ExpenseSource = 'manual' | 'meal_plan' | 'auto';
 export type Frequency = 'monthly' | 'annual';
 
@@ -132,6 +132,8 @@ export interface RecipeIngredient {
   name: string;
   quantity: number;
   unit: string;
+  quantity_m?: number;
+  quantity_f?: number;
 }
 
 export interface Recipe {
@@ -148,6 +150,15 @@ export interface Recipe {
   image_url: string | null;
   created_at: string;
   updated_at: string;
+  calories_m?: number;
+  calories_f?: number;
+  protein_m?: number;
+  protein_f?: number;
+  season?: string;
+  schiscetta?: boolean;
+  storage_tips?: string;
+  estimated_cost_m?: number;
+  estimated_cost_f?: number;
 }
 
 export interface MealPlan {
@@ -166,6 +177,11 @@ export interface MealPlan {
   updated_at: string;
   // joined
   recipe?: Recipe;
+  day_of_week?: string;
+  custom_ingredients_m?: string | null;
+  custom_ingredients_f?: string | null;
+  custom_calories?: string | null;
+  is_schiscetta?: boolean;
 }
 
 export interface FreezerItem {
