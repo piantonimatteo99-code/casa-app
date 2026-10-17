@@ -3,6 +3,7 @@ import type { Recipe, MealType } from '@/types';
 export interface SeasonalMealPreset {
   day_name: string; // 'Lunedì', 'Martedì', ...
   day_index: number; // 0 to 6 (Lunedì=0, Domenica=6)
+  week_type?: 'settimana_1' | 'settimana_2'; // Supporto menu bisettimanale
   meal_type: MealType;
   dish_name: string;
   ingredients_m: string;
@@ -42,7 +43,6 @@ export interface IngredientProportionItem {
 export const INGREDIENT_NUTRITION: Record<string, { kcal_100: number; prot_100: number }> = {
   pasta: { kcal_100: 355, prot_100: 12.5 },
   'pasta di semola': { kcal_100: 355, prot_100: 12.5 },
-  'pasta integrale': { kcal_100: 345, prot_100: 13.0 },
   riso: { kcal_100: 360, prot_100: 7.5 },
   'riso basmati': { kcal_100: 360, prot_100: 7.5 },
   'riso carnaroli': { kcal_100: 360, prot_100: 7.5 },
@@ -372,7 +372,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
   {
     id: 'rec_04',
     couple_id: 'default',
-    name: 'Pasta Integrale al Ragù Magro di Manzo e Pomodoro',
+    name: 'Pasta di Semola al Ragù Magro di Manzo e Pomodoro',
     description: 'Piatto gustoso della tradizione italiana riadattato con carne magra 5% e pasta al dente.',
     servings: 2,
     prep_time_min: 15,
@@ -392,7 +392,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     estimated_cost_m: 2.90,
     estimated_cost_f: 1.95,
     ingredients: [
-      { name: 'Pasta Integrale', quantity: 190, unit: 'g', quantity_m: 120, quantity_f: 70 },
+      { name: 'Pasta di Semola', quantity: 190, unit: 'g', quantity_m: 120, quantity_f: 70 },
       { name: 'Macinato Magro Manzo (5%)', quantity: 300, unit: 'g', quantity_m: 180, quantity_f: 120 },
       { name: 'Pomodori Pelati / Passata', quantity: 350, unit: 'g', quantity_m: 200, quantity_f: 150 },
       { name: 'Olio Extravergine d\'Oliva', quantity: 25, unit: 'g', quantity_m: 15, quantity_f: 10 },
@@ -707,7 +707,7 @@ export const SEASONAL_PLANS: Record<string, { label: string; season_key: string;
       // Martedì
       { day_name: 'Martedì', day_index: 1, meal_type: 'colazione', dish_name: 'Pancake integrali con ricotta vaccina e miele millefiori', ingredients_m: '70g Farina int. + 2 Uova + 80g Ricotta + 15g Miele', ingredients_f: '45g Farina int. + 1 Uovo + 50g Ricotta + 10g Miele', calories_text: 'M: 510 kcal (28g P) | F: 320 kcal (17g P)', is_schiscetta: false, notes: 'Pancake preparati la domenica e rigenerati in tostapane 1 min.' },
       { day_name: 'Martedì', day_index: 1, meal_type: 'spuntino', dish_name: 'Banana matura e mandorle tostate', ingredients_m: '1 Banana (150g) + 20g Mandorle', ingredients_f: '1 Banana (120g) + 12g Mandorle', calories_text: 'M: 250 kcal (6g P) | F: 180 kcal (4g P)', is_schiscetta: true, notes: 'Potassio e magnesio pre-concentrazione.' },
-      { day_name: 'Martedì', day_index: 1, meal_type: 'pranzo', dish_name: 'Pasta integrale al ragù magro di manzo, pomodoro ed EVO', ingredients_m: '120g Pasta int. + 180g Macinato + 180g Pomodoro + 15g EVO', ingredients_f: '70g Pasta int. + 120g Macinato + 150g Pomodoro + 10g EVO', calories_text: 'M: 750 kcal (48g P) | F: 470 kcal (32g P)', is_schiscetta: true, notes: 'Ragù cotto in batch per 6 porzioni; pasta al dente.' },
+      { day_name: 'Martedì', day_index: 1, meal_type: 'pranzo', dish_name: 'Pasta di semola al ragù magro di manzo, pomodoro ed EVO', ingredients_m: '120g Pasta semola + 180g Macinato + 180g Pomodoro + 15g EVO', ingredients_f: '70g Pasta semola + 120g Macinato + 150g Pomodoro + 10g EVO', calories_text: 'M: 750 kcal (48g P) | F: 470 kcal (32g P)', is_schiscetta: true, notes: 'Ragù cotto in batch per 6 porzioni; pasta al dente.' },
       { day_name: 'Martedì', day_index: 1, meal_type: 'spuntino', dish_name: 'Yogurt greco 0% con purea di frutti di bosco', ingredients_m: '180g Yogurt greco 0% + 80g Frutti di bosco', ingredients_f: '140g Yogurt greco 0% + 60g Frutti di bosco', calories_text: 'M: 140 kcal (19g P) | F: 100 kcal (14g P)', is_schiscetta: true, notes: 'Fresco e probiotico per l\'equilibrio intestinale.' },
       { day_name: 'Martedì', day_index: 1, meal_type: 'cena', dish_name: 'Filetto di salmone al forno con patate arrosto e cime di broccolo', ingredients_m: '220g Salmone + 300g Patate + 200g Broccoli + 10g EVO', ingredients_f: '140g Salmone + 180g Patate + 200g Broccoli + 8g EVO', calories_text: 'M: 760 kcal (52g P) | F: 480 kcal (33g P)', is_schiscetta: false, notes: 'Teglia unica da forno a 190°C per 25 min; broccoli croccanti.' },
 
@@ -728,7 +728,7 @@ export const SEASONAL_PLANS: Record<string, { label: string; season_key: string;
       // Venerdì
       { day_name: 'Venerdì', day_index: 4, meal_type: 'colazione', dish_name: 'Porridge d\'avena al cacao amaro e banana a fette', ingredients_m: '80g Avena + 10g Cacao + 1 Banana + 150ml Latte', ingredients_f: '50g Avena + 6g Cacao + 1 Banana + 100ml Latte', calories_text: 'M: 520 kcal (18g P) | F: 330 kcal (12g P)', is_schiscetta: false, notes: 'Caldo ed energizzante per chiudere la settimana lavorativa.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'spuntino', dish_name: 'Mix di mandorle sgusciate e uvetta sultanina', ingredients_m: '25g Mandorle + 15g Uvetta', ingredients_f: '15g Mandorle + 10g Uvetta', calories_text: 'M: 200 kcal (6g P) | F: 130 kcal (4g P)', is_schiscetta: true, notes: 'Snack compatto da tenere nel cassetto.' },
-      { day_name: 'Venerdì', day_index: 4, meal_type: 'pranzo', dish_name: 'Pasta integrale con crema di broccoli, pollo e Parmigiano', ingredients_m: '120g Pasta int. + 180g Pollo + 250g Broccoli + 20g Grana + 10g EVO', ingredients_f: '75g Pasta int. + 120g Pollo + 180g Broccoli + 15g Grana + 8g EVO', calories_text: 'M: 740 kcal (60g P) | F: 480 kcal (40g P)', is_schiscetta: true, notes: 'Preparato la sera prima; cremoso e saporito.' },
+      { day_name: 'Venerdì', day_index: 4, meal_type: 'pranzo', dish_name: 'Pasta di semola con crema di broccoli, pollo e Parmigiano', ingredients_m: '120g Pasta semola + 180g Pollo + 250g Broccoli + 20g Grana + 10g EVO', ingredients_f: '75g Pasta semola + 120g Pollo + 180g Broccoli + 15g Grana + 8g EVO', calories_text: 'M: 740 kcal (60g P) | F: 480 kcal (40g P)', is_schiscetta: true, notes: 'Preparato la sera prima; cremoso e saporito.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'spuntino', dish_name: 'Yogurt greco 0% con cannella e miele millefiori', ingredients_m: '180g Yogurt greco + 10g Miele + Cannella', ingredients_f: '140g Yogurt greco + 8g Miele + Cannella', calories_text: 'M: 140 kcal (19g P) | F: 110 kcal (14g P)', is_schiscetta: true, notes: 'Leggero prima dell\'allenamento del venerdì.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'cena', dish_name: 'Bresaola della Valtellina con rucola, limone, Grana e piadina int.', ingredients_m: '120g Bresaola + 80g Rucola + 30g Grana + 80g Pane int. + 10g EVO', ingredients_f: '80g Bresaola + 60g Rucola + 20g Grana + 50g Pane int. + 8g EVO', calories_text: 'M: 570 kcal (54g P) | F: 370 kcal (35g P)', is_schiscetta: false, notes: 'Cena veloce del venerdì sera senza accendere fornelli.' },
 
@@ -779,7 +779,7 @@ export const SEASONAL_PLANS: Record<string, { label: string; season_key: string;
       // Venerdì
       { day_name: 'Venerdì', day_index: 4, meal_type: 'colazione', dish_name: 'Porridge d\'avena al cacao amaro con noci tritate', ingredients_m: '80g Avena + 10g Cacao + 20g Noci + Latte', ingredients_f: '50g Avena + 6g Cacao + 12g Noci + Latte', calories_text: 'M: 520 kcal (19g P) | F: 330 kcal (12g P)', is_schiscetta: false, notes: 'Caldo ed energizzante.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'spuntino', dish_name: 'Mela Fuji e noci sgusciate', ingredients_m: '1 Mela + 15g Noci', ingredients_f: '1 Mela + 10g Noci', calories_text: 'M: 190 kcal (3g P) | F: 130 kcal (2g P)', is_schiscetta: true, notes: 'Anti-fame classico.' },
-      { day_name: 'Venerdì', day_index: 4, meal_type: 'pranzo', dish_name: 'Pasta integrale con crema di cavolfiore, noci e Grana', ingredients_m: '120g Pasta + 250g Cavolfiore + Grana + Noci + EVO', ingredients_f: '75g Pasta + 180g Cavolfiore + Grana + Noci + EVO', calories_text: 'M: 740 kcal (28g P) | F: 470 kcal (18g P)', is_schiscetta: true, notes: 'Cavolfiore vellutato senza panna.' },
+      { day_name: 'Venerdì', day_index: 4, meal_type: 'pranzo', dish_name: 'Pasta di semola con crema di cavolfiore, noci e Grana', ingredients_m: '120g Pasta + 250g Cavolfiore + Grana + Noci + EVO', ingredients_f: '75g Pasta + 180g Cavolfiore + Grana + Noci + EVO', calories_text: 'M: 740 kcal (28g P) | F: 470 kcal (18g P)', is_schiscetta: true, notes: 'Cavolfiore vellutato senza panna.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'spuntino', dish_name: 'Yogurt greco 0% con cannella e gocce fondenti', ingredients_m: '180g Yogurt + 15g Fondente + Cannella', ingredients_f: '140g Yogurt + 10g Fondente + Cannella', calories_text: 'M: 190 kcal (20g P) | F: 140 kcal (15g P)', is_schiscetta: true, notes: 'Goloso e tonificante.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'cena', dish_name: 'Burger magri di manzo con vellutata di carote e zenzero e pane', ingredients_m: '220g Manzo + 300g Carote/Zenzero + 80g Pane', ingredients_f: '140g Manzo + 200g Carote/Zenzero + 50g Pane', calories_text: 'M: 680 kcal (52g P) | F: 430 kcal (33g P)', is_schiscetta: false, notes: 'Zenzero termogenico e stimolante.' },
       // Sabato
@@ -810,7 +810,7 @@ export const SEASONAL_PLANS: Record<string, { label: string; season_key: string;
       // ... Martedì - Domenica Primavera
       { day_name: 'Martedì', day_index: 1, meal_type: 'colazione', dish_name: 'Pane integrale con ricotta e fettine di fragole', ingredients_m: '80g Pane int. + 90g Ricotta + 100g Fragole', ingredients_f: '50g Pane int. + 60g Ricotta + 70g Fragole', calories_text: 'M: 380 kcal (16g P) | F: 240 kcal (10g P)', is_schiscetta: false, notes: 'Freschezza mattutina.' },
       { day_name: 'Martedì', day_index: 1, meal_type: 'spuntino', dish_name: 'Banana e mandorle tostate', ingredients_m: '1 Banana + 20g Mandorle', ingredients_f: '1 Banana + 12g Mandorle', calories_text: 'M: 250 kcal (6g P) | F: 180 kcal (4g P)', is_schiscetta: true, notes: 'Energia immediata.' },
-      { day_name: 'Martedì', day_index: 1, meal_type: 'pranzo', dish_name: 'Pasta integrale con piselli primaverili, carote e Grana', ingredients_m: '120g Pasta + 150g Piselli + Grana + EVO', ingredients_f: '75g Pasta + 100g Piselli + Grana + EVO', calories_text: 'M: 730 kcal (34g P) | F: 460 kcal (22g P)', is_schiscetta: true, notes: 'Dolcezza naturale dei piselli.' },
+      { day_name: 'Martedì', day_index: 1, meal_type: 'pranzo', dish_name: 'Pasta di semola con piselli primaverili, carote e Grana', ingredients_m: '120g Pasta + 150g Piselli + Grana + EVO', ingredients_f: '75g Pasta + 100g Piselli + Grana + EVO', calories_text: 'M: 730 kcal (34g P) | F: 460 kcal (22g P)', is_schiscetta: true, notes: 'Dolcezza naturale dei piselli.' },
       { day_name: 'Martedì', day_index: 1, meal_type: 'spuntino', dish_name: 'Yogurt greco 0% con mirtilli freschi', ingredients_m: '180g Yogurt + 70g Mirtilli', ingredients_f: '140g Yogurt + 50g Mirtilli', calories_text: 'M: 140 kcal (19g P) | F: 110 kcal (14g P)', is_schiscetta: true, notes: 'Antiossidante.' },
       { day_name: 'Martedì', day_index: 1, meal_type: 'cena', dish_name: 'Orata al cartoccio con zucchine, pomodorini e pane', ingredients_m: '230g Orata + 200g Zucchine + 70g Pane + EVO', ingredients_f: '150g Orata + 160g Zucchine + 45g Pane + EVO', calories_text: 'M: 590 kcal (48g P) | F: 380 kcal (31g P)', is_schiscetta: false, notes: 'Cottura al vapore di forno in 18 min.' },
       // Mercoledì - Domenica
@@ -828,7 +828,7 @@ export const SEASONAL_PLANS: Record<string, { label: string; season_key: string;
       // Venerdì
       { day_name: 'Venerdì', day_index: 4, meal_type: 'colazione', dish_name: 'Pane integrale con ricotta fresca, miele e noci', ingredients_m: '80g Pane + 90g Ricotta + 10g Miele + Noci', ingredients_f: '50g Pane + 60g Ricotta + 8g Miele + Noci', calories_text: 'M: 450 kcal (17g P) | F: 290 kcal (11g P)', is_schiscetta: false, notes: 'Equilibrio proteico e lipidico.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'spuntino', dish_name: 'Fragole fresche con mandorle sgusciate', ingredients_m: '150g Fragole + 20g Mandorle', ingredients_f: '120g Fragole + 12g Mandorle', calories_text: 'M: 180 kcal (5g P) | F: 130 kcal (3g P)', is_schiscetta: true, notes: 'Sinergia antiossidante.' },
-      { day_name: 'Venerdì', day_index: 4, meal_type: 'pranzo', dish_name: 'Pasta integrale con tonno al naturale, olive e zucchine', ingredients_m: '120g Pasta + 140g Tonno + 200g Zucchine + EVO', ingredients_f: '75g Pasta + 90g Tonno + 160g Zucchine + EVO', calories_text: 'M: 710 kcal (49g P) | F: 450 kcal (32g P)', is_schiscetta: true, notes: 'Preparazione rapida in 12 minuti.' },
+      { day_name: 'Venerdì', day_index: 4, meal_type: 'pranzo', dish_name: 'Pasta di semola con tonno al naturale, olive e zucchine', ingredients_m: '120g Pasta + 140g Tonno + 200g Zucchine + EVO', ingredients_f: '75g Pasta + 90g Tonno + 160g Zucchine + EVO', calories_text: 'M: 710 kcal (49g P) | F: 450 kcal (32g P)', is_schiscetta: true, notes: 'Preparazione rapida in 12 minuti.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'spuntino', dish_name: 'Yogurt greco 0% con cannella', ingredients_m: '180g Yogurt + Cannella', ingredients_f: '140g Yogurt + Cannella', calories_text: 'M: 110 kcal (19g P) | F: 80 kcal (14g P)', is_schiscetta: true, notes: 'Regolatore glicemico.' },
       { day_name: 'Venerdì', day_index: 4, meal_type: 'cena', dish_name: 'Insalatona con uova sode, mozzarella, carote e pane', ingredients_m: '2 Uova + 100g Mozzarella + Insalata + 70g Pane', ingredients_f: '1 Uovo + 70g Mozzarella + Insalata + 45g Pane', calories_text: 'M: 610 kcal (36g P) | F: 390 kcal (23g P)', is_schiscetta: false, notes: 'Uova pronte dal meal prep.' },
       // Sabato
@@ -889,7 +889,7 @@ export const SEASONAL_PLANS: Record<string, { label: string; season_key: string;
       // Domenica
       { day_name: 'Domenica', day_index: 6, meal_type: 'colazione', dish_name: 'Pancake freddi preparati la sera prima con miele e mirtilli', ingredients_m: '70g Farina + 2 Uova + Mirtilli + Miele', ingredients_f: '45g Farina + 1 Uovo + Mirtilli + Miele', calories_text: 'M: 500 kcal (24g P) | F: 310 kcal (15g P)', is_schiscetta: false, notes: 'Colazione all\'ombra del terrazzo.' },
       { day_name: 'Domenica', day_index: 6, meal_type: 'spuntino', dish_name: 'Cubetti di anguria fresca', ingredients_m: '250g Anguria a cubetti', ingredients_f: '180g Anguria a cubetti', calories_text: 'M: 75 kcal (1g P) | F: 55 kcal (1g P)', is_schiscetta: false, notes: 'Idratazione continua.' },
-      { day_name: 'Domenica', day_index: 6, meal_type: 'pranzo', dish_name: 'Spaghetti integrali ai frutti di mare o vongole con prezzemolo', ingredients_m: '120g Spaghetti + 250g Frutti mare + EVO', ingredients_f: '75g Spaghetti + 180g Frutti mare + EVO', calories_text: 'M: 680 kcal (42g P) | F: 430 kcal (27g P)', is_schiscetta: false, notes: 'Il profumo del mare domenicale.' },
+      { day_name: 'Domenica', day_index: 6, meal_type: 'pranzo', dish_name: 'Spaghetti di semola ai frutti di mare o vongole con prezzemolo', ingredients_m: '120g Spaghetti + 250g Frutti mare + EVO', ingredients_f: '75g Spaghetti + 180g Frutti mare + EVO', calories_text: 'M: 680 kcal (42g P) | F: 430 kcal (27g P)', is_schiscetta: false, notes: 'Il profumo del mare domenicale.' },
       { day_name: 'Domenica', day_index: 6, meal_type: 'spuntino', dish_name: 'Caffè freddo shakerato con cubetto fondente 85%', ingredients_m: 'Caffè freddo + 15g Fondente', ingredients_f: 'Caffè freddo + 10g Fondente', calories_text: 'M: 90 kcal (1g P) | F: 60 kcal (1g P)', is_schiscetta: false, notes: 'Spinta energizzante pomeridiana.' },
       { day_name: 'Domenica', day_index: 6, meal_type: 'cena', dish_name: 'Insalata greca con feta DOP, cetrioli, pomodori e pane pita', ingredients_m: '100g Feta + Cetrioli/Pomodori + 80g Pane + EVO', ingredients_f: '70g Feta + Cetrioli/Pomodori + 50g Pane + EVO', calories_text: 'M: 640 kcal (26g P) | F: 420 kcal (18g P)', is_schiscetta: false, notes: 'Cena rinfrescante pre-cottura cereali del meal prep.' },
     ],

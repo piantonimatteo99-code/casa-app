@@ -38,7 +38,8 @@ export default function PastiPage() {
   const [recipes, setRecipes] = useState<Recipe[]>(DEFAULT_RECIPES);
   const [freezerItems, setFreezerItems] = useState<FreezerItem[]>([]);
 
-  // Filtri & Selezione Giorno nel Piano
+  // Filtri & Selezione Giorno & Settimana nel Piano Bisettimanale
+  const [selectedWeek, setSelectedWeek] = useState<'settimana_1' | 'settimana_2'>('settimana_1');
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0); // 0 = Lunedì
   const [activeSeasonKey, setActiveSeasonKey] = useState<string>('autunno');
   const [showSeasonSelector, setShowSeasonSelector] = useState(false);
@@ -46,6 +47,7 @@ export default function PastiPage() {
   // Modal / Form Inserimento & Modifica Pasto
   const [showMealModal, setShowMealModal] = useState(false);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [mealFormWeek, setMealFormWeek] = useState<'settimana_1' | 'settimana_2'>('settimana_1');
   const [mealFormDay, setMealFormDay] = useState('Lunedì');
   const [mealFormType, setMealFormType] = useState<MealType>('pranzo');
   const [mealFormRecipeId, setMealFormRecipeId] = useState('');
@@ -186,7 +188,7 @@ export default function PastiPage() {
   };
 
   // ---------------------------------------------------------------------------
-  // CARICA PIANO STAGIONALE (PRESET 1-CLICK CON TUTTI I 35 PASTI)
+  // CARICA PIANO STAGIONALE (PRESET BISETTIMANALE 1-CLICK CON 70 PASTI)
   // ---------------------------------------------------------------------------
   const loadSeasonPreset = (seasonKey: string, notify = true) => {
     const preset = SEASONAL_PLANS[seasonKey];
@@ -200,16 +202,18 @@ export default function PastiPage() {
     const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
     baseMonday.setDate(baseMonday.getDate() + diffToMonday);
 
-    const generatedMeals: MealPlan[] = preset.meals.map((item, idx) => {
+    // Genera 70 pasti: 35 per Settimana 1 e 35 per Settimana 2 (con rotazione e varianti)
+    const week1Meals: MealPlan[] = preset.meals.map((item, idx) => {
       const mealDate = new Date(baseMonday);
       mealDate.setDate(baseMonday.getDate() + item.day_index);
       const dateStr = mealDate.toISOString().split('T')[0];
 
       return {
-        id: `preset_${seasonKey}_${idx}_${Date.now()}`,
+        id: `preset_${seasonKey}_w1_${idx}_${Date.now()}`,
         couple_id: coupleId || 'local',
         date: dateStr,
         day_of_week: item.day_name,
+        week_type: 'settimana_1',
         meal_type: item.meal_type,
         recipe_id: null,
         custom_name: item.dish_name,
@@ -227,12 +231,41 @@ export default function PastiPage() {
       };
     });
 
-    setMealPlans(generatedMeals);
-    persistState(generatedMeals);
+    const week2Meals: MealPlan[] = preset.meals.map((item, idx) => {
+      const mealDate = new Date(baseMonday);
+      mealDate.setDate(baseMonday.getDate() + 7 + item.day_index);
+      const dateStr = mealDate.toISOString().split('T')[0];
+
+      return {
+        id: `preset_${seasonKey}_w2_${idx}_${Date.now()}`,
+        couple_id: coupleId || 'local',
+        date: dateStr,
+        day_of_week: item.day_name,
+        week_type: 'settimana_2',
+        meal_type: item.meal_type,
+        recipe_id: null,
+        custom_name: item.dish_name,
+        custom_ingredients_m: item.ingredients_m,
+        custom_ingredients_f: item.ingredients_f,
+        custom_calories: item.calories_text,
+        is_schiscetta: item.is_schiscetta,
+        servings: 2,
+        consumed: false,
+        consumed_at: null,
+        from_freezer: false,
+        notes: item.notes,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    const allGeneratedMeals = [...week1Meals, ...week2Meals];
+    setMealPlans(allGeneratedMeals);
+    persistState(allGeneratedMeals);
     setShowSeasonSelector(false);
 
     if (notify) {
-      showToast(`Caricato con successo il ${preset.label} con tutti i 35 pasti settimanali!`);
+      showToast(`Caricato con successo il ${preset.label} Bisettimanale (70 pasti completi su 2 settimane)!`);
     }
   };
 
@@ -241,6 +274,7 @@ export default function PastiPage() {
   // ---------------------------------------------------------------------------
   const handleOpenAddMeal = (dayName?: string, mealType?: MealType) => {
     setEditingMealId(null);
+    setMealFormWeek(selectedWeek);
     setMealFormDay(dayName || DAYS_OF_WEEK[selectedDayIndex]);
     setMealFormType(mealType || 'pranzo');
     setMealFormRecipeId('');
@@ -256,6 +290,7 @@ export default function PastiPage() {
 
   const handleOpenEditMeal = (meal: MealPlan) => {
     setEditingMealId(meal.id);
+    setMealFormWeek(meal.week_type || selectedWeek);
     setMealFormDay(meal.day_of_week || DAYS_OF_WEEK[selectedDayIndex]);
     setMealFormType(meal.meal_type);
     setMealFormRecipeId(meal.recipe_id || '');
@@ -298,7 +333,8 @@ export default function PastiPage() {
     const baseDate = new Date();
     const currentDay = baseDate.getDay();
     const diff = currentDay === 0 ? -6 : 1 - currentDay;
-    baseDate.setDate(baseDate.getDate() + diff + (dayIdx >= 0 ? dayIdx : 0));
+    const weekOffset = mealFormWeek === 'settimana_2' ? 7 : 0;
+    baseDate.setDate(baseDate.getDate() + diff + weekOffset + (dayIdx >= 0 ? dayIdx : 0));
     const dateStr = baseDate.toISOString().split('T')[0];
 
     if (editingMealId) {
@@ -308,6 +344,7 @@ export default function PastiPage() {
           return {
             ...m,
             day_of_week: mealFormDay,
+            week_type: mealFormWeek,
             meal_type: mealFormType,
             date: dateStr,
             recipe_id: mealFormRecipeId || null,
@@ -334,6 +371,7 @@ export default function PastiPage() {
         couple_id: coupleId || 'local',
         date: dateStr,
         day_of_week: mealFormDay,
+        week_type: mealFormWeek,
         meal_type: mealFormType,
         recipe_id: mealFormRecipeId || null,
         recipe: selectedRecipe,
@@ -626,11 +664,13 @@ export default function PastiPage() {
     });
   }, [recipes, recipeSearch, recipeFilterSeason, recipeFilterCategory, recipeFilterSchiscettaOnly]);
 
-  // Pasti del giorno selezionato
+  // Pasti del giorno selezionato (filtrati per la settimana attiva nella rotazione bisettimanale)
   const selectedDayName = DAYS_OF_WEEK[selectedDayIndex];
   const currentDayMeals = useMemo(() => {
-    return mealPlans.filter((m) => m.day_of_week === selectedDayName);
-  }, [mealPlans, selectedDayName]);
+    return mealPlans.filter(
+      (m) => m.day_of_week === selectedDayName && (m.week_type || 'settimana_1') === selectedWeek
+    );
+  }, [mealPlans, selectedDayName, selectedWeek]);
 
   // ---------------------------------------------------------------------------
   // GESTIONE FREEZER
@@ -690,15 +730,20 @@ export default function PastiPage() {
       {/* Header Pagina & Badge Informativo */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-3xl shadow-sm border border-slate-700/60">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs font-bold uppercase tracking-wider bg-teal-500/20 text-teal-300 px-2.5 py-0.5 rounded-full border border-teal-500/30">
-              Nutrizione &amp; Meal Prep Coppia
+              Nutrizione &amp; Meal Prep Bisettimanale
             </span>
-            <span className="text-xs text-slate-400">• M: 85 kg (~2.650 kcal) | F: 52 kg (~1.850 kcal)</span>
+            <span className="text-xs text-slate-300 font-medium">
+              🏊 M: 27a, 85 kg, 185 cm, Nuoto 3h/sett (~2.750 kcal) | 🏋️ F: 25a, 50 kg, 145 cm, Palestra 2h/sett (~1.800 kcal)
+            </span>
+            <span className="text-[11px] bg-slate-800 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+              🍝 Pasta normale di semola • ❄️ Spesa mensile ≤ 450€ • Batch Domenica
+            </span>
           </div>
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight">Piano Alimentare &amp; Gestione Schiscetta</h2>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight">Piano Alimentare Bisettimanale &amp; Schiscetta</h2>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-            Scegli e modifica i piatti della settimana, calcola le porzioni crudo-cotto per due e gestisci le sessioni di batch cooking.
+            Menu stagionale a rotazione di 2 settimane (Settimana 1 &amp; Settimana 2). Cucina nel fine settimana, congela in vasetti ed estrai le schiscette per il lavoro.
           </p>
         </div>
 
@@ -792,15 +837,63 @@ export default function PastiPage() {
       </div>
 
       {/* =====================================================================
-          TAB 1: PIANO ALIMENTARE SETTIMANALE
+          TAB 1: PIANO ALIMENTARE SETTIMANALE (BISETTIMANALE)
           ===================================================================== */}
       {activeTab === 'piano' && (
         <div className="space-y-5">
+          {/* Selettore Rotazione Bisettimanale: Settimana 1 vs Settimana 2 */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-slate-100 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider px-2">Rotazione Menù:</span>
+              <div className="inline-flex rounded-xl p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeek('settimana_1')}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition ${
+                    selectedWeek === 'settimana_1'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <span>📅 Settimana 1</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    selectedWeek === 'settimana_1' ? 'bg-teal-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                  }`}>
+                    {mealPlans.filter((m) => (m.week_type || 'settimana_1') === 'settimana_1').length} pasti
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeek('settimana_2')}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition ${
+                    selectedWeek === 'settimana_2'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <span>🔄 Settimana 2</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    selectedWeek === 'settimana_2' ? 'bg-teal-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                  }`}>
+                    {mealPlans.filter((m) => m.week_type === 'settimana_2').length} pasti
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 px-2 flex items-center gap-1.5">
+              <span>Menù bisettimanale con rotazione 14 giorni per varietà e meal prep</span>
+            </div>
+          </div>
+
           {/* Selettore Giorno Orizzontale */}
           <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-none">
             <div className="flex gap-2">
               {DAYS_OF_WEEK.map((day, idx) => {
-                const dayCount = mealPlans.filter((m) => m.day_of_week === day).length;
+                const dayCount = mealPlans.filter(
+                  (m) => m.day_of_week === day && (m.week_type || 'settimana_1') === selectedWeek
+                ).length;
                 const isSelected = selectedDayIndex === idx;
 
                 return (
@@ -1157,7 +1250,7 @@ export default function PastiPage() {
               <div>
                 <h3 className="font-bold text-slate-900 dark:text-white text-base">Calcolatore Crudo ➔ Cotto per la Coppia</h3>
                 <p className="text-xs text-slate-500">
-                  Calcola esattamente quanti grammi pesare da cotto sulla bilancia per l&apos;Uomo (85 kg) e per la Donna (52 kg)
+                  Calcola esattamente quanti grammi pesare da cotto sulla bilancia per l&apos;Uomo (85 kg) e per la Donna (50 kg)
                 </p>
               </div>
             </div>
@@ -1211,7 +1304,7 @@ export default function PastiPage() {
               {/* Donna */}
               <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  👩 Porzione Donna (52 kg)
+                  👩 Porzione Donna (50 kg)
                 </span>
                 <div className="flex items-center gap-2">
                   <label className="text-[11px] text-slate-500">Crudo (g):</label>
@@ -1344,7 +1437,7 @@ export default function PastiPage() {
                   2. Calcolo Fabbisogno M vs F
                 </span>
                 <p className="text-slate-300 text-[11px]">
-                  Impostando la proporzione base (es. 120g pasta / 40g ragù), il sistema calcola la grammatura esatta per M (85 kg, ~750 kcal) e per F (52 kg, ~480 kcal).
+                  Impostando la proporzione base (es. 120g pasta / 40g ragù), il sistema calcola la grammatura esatta per M (85 kg, ~750 kcal) e per F (50 kg, ~480 kcal).
                 </p>
               </div>
 
@@ -1356,6 +1449,99 @@ export default function PastiPage() {
                   Un vasetto da 200g copre esattamente 3 pasti coppia. Scongelamento rapido in padella con poca acqua di cottura della pasta per mantenere la cremosità.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Sezione: Guida Strategica Spesa Mensile Unica (Budget 450€) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-200 dark:border-emerald-800">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                    Piano Spesa Mensile Unica (Budget Target: 450 €)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Come fare la spesa solo 1 volta al mese senza sprechi, dividendo gli acquisti tra dispensa, freezer e prodotti a lunga tenuta.
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                Totale Stimato: ~415 € / mese
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-900 dark:text-white">🌾 Dispensa Secca</span>
+                  <span className="text-teal-600 font-bold text-[11px]">~85 €</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                  <li>• Pasta di semola normale: 8 kg</li>
+                  <li>• Riso basmati / parboiled: 6 kg</li>
+                  <li>• Fiocchi d&apos;avena per colazione: 3 kg</li>
+                  <li>• Legumi secchi e barattoli: 16 barattoli</li>
+                  <li>• Olio EVO (3 L) + Passata pomodoro</li>
+                </ul>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-900 dark:text-white">❄️ Proteine &amp; Freezer</span>
+                  <span className="text-teal-600 font-bold text-[11px]">~160 €</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                  <li>• Petto di pollo a fette: 8 kg (in sacchetti)</li>
+                  <li>• Macinato magro manzo: 4 kg (per sughi)</li>
+                  <li>• Tranci di salmone: 2 kg surgelati</li>
+                  <li>• Filetti di merluzzo / platessa: 2.5 kg</li>
+                  <li>• <em>Porzionare appena rientrati dalla spesa</em></li>
+                </ul>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-900 dark:text-white">🥚 Latticini &amp; Uova</span>
+                  <span className="text-teal-600 font-bold text-[11px]">~65 €</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                  <li>• Uova fresche: 6 confezioni (60 uova)</li>
+                  <li>• Ricotta vaccina &amp; feta: 6-8 confezioni</li>
+                  <li>• Yogurt greco 0% (multipack/secchiello 1kg)</li>
+                  <li>• Grana Padano / Parmigiano a pezzi (lunga tenuta)</li>
+                </ul>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-900 dark:text-white">🥔 Ortaggi &amp; Frutta</span>
+                  <span className="text-teal-600 font-bold text-[11px]">~105 €</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                  <li>• Patate (sacco 10 kg al buio fresco)</li>
+                  <li>• Zucca intera (dura 2-3 mesi intera)</li>
+                  <li>• Carote, cavolo cappuccio, finocchi</li>
+                  <li>• Mele Fuji e agrumi (in frigo 4 settimane)</li>
+                  <li>• Verdure surgelate (spinaci, piselli, fagiolini)</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="flex items-center gap-2">
+                <span className="text-emerald-500 font-bold">✓ Margine di Sicurezza:</span>
+                Spesa media ~415 € rispetto al budget di 450 €, lasciando un margine di 35 € per emergenze o sfizi.
+              </span>
+              <button
+                type="button"
+                onClick={handleExportToShoppingList}
+                className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold transition flex items-center gap-1.5 shrink-0"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" /> Esporta Lista del Mese
+              </button>
             </div>
           </div>
         </div>
@@ -1484,14 +1670,26 @@ export default function PastiPage() {
             </div>
 
             <form onSubmit={handleSaveMeal} className="space-y-3.5">
-              {/* Giorno e Tipo Pasto */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Settimana, Giorno e Tipo Pasto */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">Settimana</label>
+                  <select
+                    value={mealFormWeek}
+                    onChange={(e) => setMealFormWeek(e.target.value as 'settimana_1' | 'settimana_2')}
+                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-medium"
+                  >
+                    <option value="settimana_1">Settimana 1</option>
+                    <option value="settimana_2">Settimana 2</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">Giorno</label>
                   <select
                     value={mealFormDay}
                     onChange={(e) => setMealFormDay(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-medium"
+                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-medium"
                   >
                     {DAYS_OF_WEEK.map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -1504,7 +1702,7 @@ export default function PastiPage() {
                   <select
                     value={mealFormType}
                     onChange={(e) => setMealFormType(e.target.value as MealType)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-medium"
+                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-medium"
                   >
                     <option value="colazione">Colazione</option>
                     <option value="spuntino_mattina">Spuntino Mattina</option>

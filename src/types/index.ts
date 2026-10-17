@@ -178,6 +178,7 @@ export interface MealPlan {
   // joined
   recipe?: Recipe;
   day_of_week?: string;
+  week_type?: 'settimana_1' | 'settimana_2';
   custom_ingredients_m?: string | null;
   custom_ingredients_f?: string | null;
   custom_calories?: string | null;
