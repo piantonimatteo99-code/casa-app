@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   UtensilsCrossed, Snowflake, Check, Plus, Calendar, Clock, AlertTriangle, Trash2, Tag,
   Edit3, Sparkles, ChefHat, Scale, ArrowRight, RefreshCw, ShoppingCart, Info, Flame,
-  CheckCircle2, Filter, Search, X, Layers, Sun, Snowflake as SnowflakeIcon, Leaf, CloudSun
+  CheckCircle2, Filter, Search, X, Layers, Sun, Snowflake as SnowflakeIcon, Leaf, CloudSun,
+  FileText, Download, Printer, Eye, CalendarDays
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatDate, isExpiringSoon } from '@/lib/utils';
@@ -30,8 +31,9 @@ export default function PastiPage() {
   const [loading, setLoading] = useState(true);
   const [coupleId, setCoupleId] = useState<string | null>(null);
 
-  // Tab Principale: 'piano' | 'ricette' | 'mealprep' | 'freezer'
-  const [activeTab, setActiveTab] = useState<'piano' | 'ricette' | 'mealprep' | 'freezer'>('piano');
+  // Tab Principale: 'riepilogo' | 'piano' | 'ricette' | 'mealprep' | 'freezer'
+  const [activeTab, setActiveTab] = useState<'riepilogo' | 'piano' | 'ricette' | 'mealprep' | 'freezer'>('riepilogo');
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   // Stato Dati
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
@@ -231,7 +233,8 @@ export default function PastiPage() {
       };
     });
 
-    const week2Meals: MealPlan[] = preset.meals.map((item, idx) => {
+    const week2Source = preset.meals_week2 && preset.meals_week2.length > 0 ? preset.meals_week2 : preset.meals;
+    const week2Meals: MealPlan[] = week2Source.map((item, idx) => {
       const mealDate = new Date(baseMonday);
       mealDate.setDate(baseMonday.getDate() + 7 + item.day_index);
       const dateStr = mealDate.toISOString().split('T')[0];
@@ -672,6 +675,48 @@ export default function PastiPage() {
     );
   }, [mealPlans, selectedDayName, selectedWeek]);
 
+  // Prossimi 7 giorni a partire da Oggi per la Scheda Riepilogo Rapido
+  const nextSevenDays = useMemo(() => {
+    const today = new Date();
+    const italianDays = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+    const result = [];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dayName = italianDays[d.getDay()];
+      const dateStr = d.toISOString().split('T')[0];
+
+      const dayMeals = mealPlans.filter(
+        (m) => m.day_of_week === dayName && (m.week_type || 'settimana_1') === selectedWeek
+      );
+
+      const orderMap: Record<string, number> = {
+        colazione: 1,
+        spuntino_mattina: 2,
+        spuntino: 2,
+        pranzo: 3,
+        merenda: 4,
+        cena: 5,
+      };
+
+      const sortedMeals = [...dayMeals].sort(
+        (a, b) => (orderMap[a.meal_type] || 9) - (orderMap[b.meal_type] || 9)
+      );
+
+      result.push({
+        date: d,
+        dateStr,
+        dayName,
+        isToday: i === 0,
+        isTomorrow: i === 1,
+        meals: sortedMeals,
+      });
+    }
+
+    return result;
+  }, [mealPlans, selectedWeek]);
+
   // ---------------------------------------------------------------------------
   // GESTIONE FREEZER
   // ---------------------------------------------------------------------------
@@ -779,6 +824,15 @@ export default function PastiPage() {
           </div>
 
           <button
+            onClick={() => setShowPdfModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition"
+            title="Visualizza e scarica la scheda PDF completa del piano alimentare per la coppia"
+          >
+            <FileText className="w-3.5 h-3.5 text-indigo-200" />
+            <span>Scarica Scheda PDF</span>
+          </button>
+
+          <button
             onClick={handleExportToShoppingList}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-600 transition"
             title="Invia tutti gli ingredienti necessari alla Lista della Spesa"
@@ -791,6 +845,17 @@ export default function PastiPage() {
 
       {/* Navigazione Tab */}
       <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none gap-2">
+        <button
+          onClick={() => setActiveTab('riepilogo')}
+          className={`flex items-center gap-2 py-3 px-4 font-semibold text-xs md:text-sm border-b-2 transition whitespace-nowrap ${
+            activeTab === 'riepilogo'
+              ? 'border-teal-600 text-teal-600 dark:text-teal-400 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" /> Riepilogo &amp; Prossimi Giorni
+        </button>
+
         <button
           onClick={() => setActiveTab('piano')}
           className={`flex items-center gap-2 py-3 px-4 font-semibold text-xs md:text-sm border-b-2 transition whitespace-nowrap ${
@@ -835,6 +900,253 @@ export default function PastiPage() {
           <Snowflake className="w-4 h-4" /> Registro Freezer ({freezerItems.length})
         </button>
       </div>
+
+      {/* =====================================================================
+          TAB 0: RIEPILOGO & PROSSIMI GIORNI (PANORAMICA DIRETTA)
+          ===================================================================== */}
+      {activeTab === 'riepilogo' && (
+        <div className="space-y-6">
+          {/* Card Riepilogo Esecutivo: Oggi & Domani */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Box Schiscetta Domani */}
+            <div className="bg-gradient-to-br from-teal-900 to-slate-900 text-white p-5 rounded-3xl border border-teal-800/50 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-teal-300 uppercase tracking-wider flex items-center gap-1.5">
+                  🍱 Schiscetta Ufficio Domani
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-bold border border-teal-500/30">
+                  Meal Prep
+                </span>
+              </div>
+              <p className="text-sm font-extrabold text-white">
+                {nextSevenDays[1]?.meals.find((m) => m.meal_type === 'pranzo')?.recipe?.name ||
+                  nextSevenDays[1]?.meals.find((m) => m.meal_type === 'pranzo')?.custom_name ||
+                  'Pranzo bilanciato programmato'}
+              </p>
+              <p className="text-[11px] text-teal-200/80">
+                👨 M (85kg): ~750 kcal | 👩 F (50kg): ~470 kcal. Già pronta in vaschetta o vasetto freezer.
+              </p>
+            </div>
+
+            {/* Box Promemoria Scongelamento Stasera */}
+            <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-5 rounded-3xl border border-indigo-800/50 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                  ❄️ Da Scongelare Stasera
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">
+                  Freezer
+                </span>
+              </div>
+              <p className="text-sm font-extrabold text-white">
+                Monoporzioni freezer o proteine
+              </p>
+              <p className="text-[11px] text-indigo-200/80">
+                Spostare dal congelatore a -18°C al ripiano frigo a +4°C stasera per uno scongelamento sicuro e ottimale.
+              </p>
+            </div>
+
+            {/* Box Target Nutrizionali Coppia */}
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2 flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  🎯 Fabbisogno Giornaliero Coppia
+                </span>
+                <div className="space-y-1 text-xs">
+                  <p className="text-slate-800 dark:text-slate-200">
+                    👨 <strong>Uomo (85 kg, Nuoto 3h):</strong> ~2.750 kcal | ~150g proteine
+                  </p>
+                  <p className="text-slate-800 dark:text-slate-200">
+                    👩 <strong>Donna (50 kg, Palestra 2h):</strong> ~1.800 kcal | ~90g proteine
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPdfModal(true)}
+                className="w-full py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Scarica Scheda Stampabile PDF</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Timeline Prossimi 7 Giorni */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-lg flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-teal-600" />
+                  <span>I Tuoi Pasti dei Prossimi 7 Giorni</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Visualizzazione sequenziale da oggi in avanti, calcolata con porzioni M (85 kg) ed F (50 kg)
+                </p>
+              </div>
+
+              {/* Selettore Settimana Attiva */}
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs font-bold text-slate-400">Rotazione:</span>
+                <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60">
+                  <button
+                    onClick={() => setSelectedWeek('settimana_1')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      selectedWeek === 'settimana_1'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Settimana 1
+                  </button>
+                  <button
+                    onClick={() => setSelectedWeek('settimana_2')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      selectedWeek === 'settimana_2'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Settimana 2
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Griglia Card Giorni Successivi */}
+            <div className="space-y-4">
+              {nextSevenDays.map((dayItem, dayIdx) => {
+                const isToday = dayItem.isToday;
+                const isTomorrow = dayItem.isTomorrow;
+
+                return (
+                  <div
+                    key={`${dayItem.dateStr}_${dayIdx}`}
+                    className={`p-5 rounded-3xl border transition space-y-3.5 ${
+                      isToday
+                        ? 'bg-white dark:bg-slate-900 border-teal-500 shadow-md ring-1 ring-teal-500/30'
+                        : isTomorrow
+                        ? 'bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-900 shadow-sm'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
+                    }`}
+                  >
+                    {/* Header Giorno */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`text-xs font-extrabold px-3 py-1 rounded-xl uppercase tracking-wider ${
+                            isToday
+                              ? 'bg-teal-600 text-white'
+                              : isTomorrow
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {isToday ? '🌟 OGGI' : isTomorrow ? 'DOMANI' : dayItem.dayName}
+                        </span>
+
+                        <span className="text-sm font-bold text-slate-900 dark:text-white">
+                          {dayItem.date.toLocaleDateString('it-IT', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                          })}
+                        </span>
+                      </div>
+
+                      <span className="text-xs text-slate-400 font-medium">
+                        {dayItem.meals.length} pasti pianificati
+                      </span>
+                    </div>
+
+                    {/* Lista dei Pasti del Giorno */}
+                    {dayItem.meals.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-3 italic">
+                        Nessun pasto configurato per {dayItem.dayName}. Carica un preset stagionale dal menu in alto.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        {dayItem.meals.map((meal) => {
+                          const conf = MEAL_TYPE_CONFIG[meal.meal_type] || MEAL_TYPE_CONFIG.pranzo;
+                          const title = meal.recipe?.name || meal.custom_name || 'Pasto';
+
+                          return (
+                            <div
+                              key={meal.id}
+                              className={`p-3.5 rounded-2xl border flex flex-col justify-between space-y-2 transition ${
+                                meal.consumed
+                                  ? 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60'
+                                  : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800 hover:border-teal-300'
+                              }`}
+                            >
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${conf.badgeClass}`}>
+                                    {conf.icon} {conf.label}
+                                  </span>
+
+                                  {meal.is_schiscetta && (
+                                    <span
+                                      className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
+                                      title="Pasto da asporto per l'ufficio"
+                                    >
+                                      🍱 Schiscetta
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className={`text-xs font-bold text-slate-900 dark:text-white line-clamp-2 ${meal.consumed ? 'line-through text-slate-400' : ''}`}>
+                                  {title}
+                                </p>
+
+                                {/* Dettaglio Grammature M vs F */}
+                                <div className="text-[10px] space-y-0.5 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 font-mono">
+                                  {meal.custom_ingredients_m && (
+                                    <p className="truncate" title={meal.custom_ingredients_m}>
+                                      👨 <strong>M:</strong> {meal.custom_ingredients_m}
+                                    </p>
+                                  )}
+                                  {meal.custom_ingredients_f && (
+                                    <p className="truncate" title={meal.custom_ingredients_f}>
+                                      👩 <strong>F:</strong> {meal.custom_ingredients_f}
+                                    </p>
+                                  )}
+                                </div>
+
+                                {meal.custom_calories && (
+                                  <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">
+                                    🔥 {meal.custom_calories}
+                                  </p>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => handleToggleConsumed(meal.id)}
+                                className={`w-full py-1 rounded-xl text-[10px] font-bold transition flex items-center justify-center gap-1 mt-1 border ${
+                                  meal.consumed
+                                    ? 'bg-emerald-600 border-emerald-600 text-white'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-500'
+                                }`}
+                              >
+                                {meal.consumed ? (
+                                  <>
+                                    <Check className="w-3 h-3 stroke-[3]" /> Consumato
+                                  </>
+                                ) : (
+                                  'Segna consumato'
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =====================================================================
           TAB 1: PIANO ALIMENTARE SETTIMANALE (BISETTIMANALE)
@@ -2122,6 +2434,217 @@ export default function PastiPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL: SCHEDA PDF STAMPABILE CON TUTTI I DETTAGLI (window.print())
+          ===================================================================== */}
+      {showPdfModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static">
+          <div className="bg-white text-slate-900 rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:rounded-none animate-scale-in">
+            {/* Barra Azioni Modale (Nascosta in Stampa) */}
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xs px-6 py-4 border-b border-slate-200 flex items-center justify-between z-10 print:hidden">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  Anteprima Scheda PDF Ufficiale Coppia &amp; Meal Prep
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Stampa o Salva PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPdfModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* DOCUMENTO STAMPABILE FORMATO A4 */}
+            <div id="print-area" className="p-6 sm:p-10 space-y-6 text-slate-900 bg-white print:p-6 print:m-0">
+              {/* Header Documento */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-slate-900 pb-4 gap-3">
+                <div>
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">
+                    Piano Alimentare &amp; Meal Prep
+                  </h1>
+                  <p className="text-xs text-slate-600 font-medium">
+                    Protocollo Nutrizionale Bisettimanale • Spesa Mensile Budget 450€ • Batch Cooking Weekend
+                  </p>
+                </div>
+                <div className="text-left sm:text-right text-xs">
+                  <span className="font-bold text-slate-900">CasaApp Family Nutrition</span>
+                  <p className="text-[11px] text-slate-500">
+                    Stagione: {SEASONAL_PLANS[activeSeasonKey]?.label || 'Autunno'} • {selectedWeek === 'settimana_1' ? 'Settimana 1' : 'Settimana 2'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Anagrafica e Fabbisogno Coppia */}
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+                <div className="space-y-1">
+                  <div className="font-black text-indigo-900 uppercase tracking-wider text-[11px]">
+                    👨 Profilo Uomo (85 kg)
+                  </div>
+                  <p className="text-slate-700">
+                    <strong>Età:</strong> 27 anni • <strong>Altezza:</strong> 185 cm • <strong>Sport:</strong> Nuoto 3h/sett
+                  </p>
+                  <p className="text-slate-700">
+                    <strong>Fabbisogno:</strong> ~2.750 kcal/die • <strong>Proteine:</strong> 145-155g/die
+                  </p>
+                  <p className="text-[11px] text-slate-500">Pranzo: 740-760 kcal | Cena: 650-700 kcal | Colazione: 520 kcal</p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="font-black text-rose-900 uppercase tracking-wider text-[11px]">
+                    👩 Profilo Donna (50 kg)
+                  </div>
+                  <p className="text-slate-700">
+                    <strong>Età:</strong> 25 anni • <strong>Altezza:</strong> 145 cm • <strong>Sport:</strong> Palestra 2h/sett
+                  </p>
+                  <p className="text-slate-700">
+                    <strong>Fabbisogno:</strong> ~1.800 kcal/die • <strong>Proteine:</strong> 85-95g/die
+                  </p>
+                  <p className="text-[11px] text-slate-500">Pranzo: 460-480 kcal | Cena: 400-430 kcal | Colazione: 320 kcal</p>
+                </div>
+              </div>
+
+              {/* Note Dietetiche Fisse */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex flex-wrap items-center justify-between gap-2">
+                <span>🍝 <strong>Pasta:</strong> Normale di semola grano duro (nessuna pasta integrale).</span>
+                <span>🍱 <strong>Pranzi feriali:</strong> 100% da asporto per l&apos;ufficio (schiscetta).</span>
+                <span>🛒 <strong>Budget Spesa:</strong> ≤ 450 €/mese (spesa unica a inizio mese).</span>
+              </div>
+
+              {/* Tabella Settimanale Completa */}
+              <div className="space-y-3">
+                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
+                  Menù Settimanale Dettagliato ({selectedWeek === 'settimana_1' ? 'Settimana 1' : 'Settimana 2'})
+                </h2>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border border-slate-300 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-900 text-white font-bold text-[11px]">
+                        <th className="p-2 border border-slate-700 w-24">Giorno</th>
+                        <th className="p-2 border border-slate-700">Colazione</th>
+                        <th className="p-2 border border-slate-700">Pranzo (Schiscetta)</th>
+                        <th className="p-2 border border-slate-700">Spuntini</th>
+                        <th className="p-2 border border-slate-700">Cena</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {DAYS_OF_WEEK.map((dayName, dIdx) => {
+                        const dayMeals = mealPlans.filter(
+                          (m) => m.day_of_week === dayName && (m.week_type || 'settimana_1') === selectedWeek
+                        );
+                        const colaz = dayMeals.find((m) => m.meal_type === 'colazione');
+                        const pranzo = dayMeals.find((m) => m.meal_type === 'pranzo');
+                        const spuntini = dayMeals.filter((m) => m.meal_type.includes('spuntino') || m.meal_type === 'merenda');
+                        const cena = dayMeals.find((m) => m.meal_type === 'cena');
+
+                        return (
+                          <tr key={dayName} className={dIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                            <td className="p-2 font-bold text-slate-900 border border-slate-300 align-top">
+                              {dayName}
+                            </td>
+                            <td className="p-2 border border-slate-300 align-top text-[11px]">
+                              <p className="font-semibold text-slate-900">{colaz?.recipe?.name || colaz?.custom_name || '-'}</p>
+                              {colaz?.custom_ingredients_m && (
+                                <p className="text-[10px] text-slate-600 mt-0.5">
+                                  <strong>M:</strong> {colaz.custom_ingredients_m}<br />
+                                  <strong>F:</strong> {colaz.custom_ingredients_f}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-2 border border-slate-300 align-top text-[11px]">
+                              <p className="font-semibold text-slate-900 flex items-center gap-1">
+                                <span>{pranzo?.recipe?.name || pranzo?.custom_name || '-'}</span>
+                                {pranzo?.is_schiscetta && <span className="text-[9px] bg-teal-100 px-1 rounded">🍱</span>}
+                              </p>
+                              {pranzo?.custom_ingredients_m && (
+                                <p className="text-[10px] text-slate-600 mt-0.5">
+                                  <strong>M:</strong> {pranzo.custom_ingredients_m}<br />
+                                  <strong>F:</strong> {pranzo.custom_ingredients_f}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-2 border border-slate-300 align-top text-[11px]">
+                              {spuntini.map((s, si) => (
+                                <div key={si} className="mb-1">
+                                  <p className="font-semibold text-slate-800">• {s.recipe?.name || s.custom_name}</p>
+                                  {s.custom_ingredients_m && (
+                                    <p className="text-[10px] text-slate-500">M: {s.custom_ingredients_m} | F: {s.custom_ingredients_f}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </td>
+                            <td className="p-2 border border-slate-300 align-top text-[11px]">
+                              <p className="font-semibold text-slate-900">{cena?.recipe?.name || cena?.custom_name || '-'}</p>
+                              {cena?.custom_ingredients_m && (
+                                <p className="text-[10px] text-slate-600 mt-0.5">
+                                  <strong>M:</strong> {cena.custom_ingredients_m}<br />
+                                  <strong>F:</strong> {cena.custom_ingredients_f}
+                                </p>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tabella Conversione Crudo -> Cotto */}
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Guida Bilancia Crudo ➔ Cotto per Pentola Unica
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                  {RAW_TO_COOKED_CONVERSIONS.slice(0, 4).map((c) => (
+                    <div key={c.name} className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                      <p className="font-bold text-slate-900">{c.name}</p>
+                      <p className="text-slate-600">Fattore: {c.factor_label}</p>
+                      <p className="text-indigo-900 font-semibold mt-0.5">
+                        👨 M: {c.cooked_m}g | 👩 F: {c.cooked_f}g
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Note Batch Cooking Weekend */}
+              <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl text-xs space-y-1.5 text-teal-950">
+                <div className="font-black uppercase tracking-wider text-[11px]">
+                  🍳 Sessione Batch Cooking Weekend (Domenica 120 min)
+                </div>
+                <p>
+                  1. <strong>Fornelli:</strong> Cuoci contemporaneamente pentola comune cereali (riso o pasta di semola) e 6 uova sode.<br />
+                  2. <strong>Forno 190°C:</strong> Teglia unica con verdure (zucca, broccoli, patate novelle) e proteine.<br />
+                  3. <strong>Porzionatura:</strong> Pesa le vaschette separate sulla bilancia (M vs F), raffredda entro 90 min e riponi a +4°C per lunedì-mercoledì.<br />
+                  4. <strong>Mercoledì sera (45 min):</strong> Rigenera verdure fresche e cuoci proteine delicate per giovedì e venerdì.
+                </p>
+              </div>
+
+              {/* Footer Documento */}
+              <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                <span>Generato da CasaApp • Gestione Domestica, Budget e Nutrizione Coppia</span>
+                <span>Data: {new Date().toLocaleDateString('it-IT')}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

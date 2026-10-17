@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Receipt, PiggyBank, TrendingUp, ShieldCheck,
-  UtensilsCrossed, ShoppingCart, Settings, Heart, X, LogOut
+  UtensilsCrossed, ShoppingCart, Settings, Heart, X, LogOut, Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -12,12 +12,13 @@ import { useRouter } from 'next/navigation';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/calendario', label: 'Calendario Famiglia', icon: Calendar },
+  { href: '/pasti', label: 'Piano Pasti & Dieta', icon: UtensilsCrossed },
+  { href: '/lista-spesa', label: 'Lista Spesa', icon: ShoppingCart },
   { href: '/spese', label: 'Spese', icon: Receipt },
   { href: '/budget', label: 'Budget', icon: PiggyBank },
   { href: '/investimenti', label: 'Investimenti', icon: TrendingUp },
   { href: '/fondo-emergenza', label: 'Fondo Emergenza', icon: ShieldCheck },
-  { href: '/pasti', label: 'Piano Pasti', icon: UtensilsCrossed },
-  { href: '/lista-spesa', label: 'Lista Spesa', icon: ShoppingCart },
   { href: '/impostazioni', label: 'Impostazioni', icon: Settings },
 ];
 

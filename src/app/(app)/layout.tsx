@@ -7,12 +7,13 @@ import { usePathname } from 'next/navigation';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/calendario': 'Calendario Famiglia & Impegni',
+  '/pasti': 'Piano Pasti & Dieta',
+  '/lista-spesa': 'Lista della Spesa',
   '/spese': 'Spese',
   '/budget': 'Budget',
   '/investimenti': 'Investimenti',
   '/fondo-emergenza': 'Fondo di Emergenza',
-  '/pasti': 'Piano Pasti',
-  '/lista-spesa': 'Lista della Spesa',
   '/impostazioni': 'Impostazioni',
 };
 

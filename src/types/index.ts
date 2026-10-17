@@ -273,3 +273,23 @@ export interface BudgetVsActual {
   actual: number;
   color: string;
 }
+
+export type EventCategory = 'famiglia' | 'lavoro' | 'sport' | 'casa' | 'spesa' | 'medico' | 'altro';
+export type EventAssignee = 'lui' | 'lei' | 'coppia' | 'famiglia';
+
+export interface CalendarEvent {
+  id: string;
+  couple_id?: string;
+  title: string;
+  description?: string;
+  date: string; // YYYY-MM-DD
+  start_time?: string; // HH:mm
+  end_time?: string; // HH:mm
+  category: EventCategory;
+  assigned_to: EventAssignee;
+  completed: boolean;
+  location?: string;
+  reminder_min?: number;
+  created_at: string;
+  updated_at: string;
+}
